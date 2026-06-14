@@ -1,0 +1,7 @@
+Project Alpha: Experimental Test DocumentThis is a temporary text file created exclusively to test Amazon S3 public read access. It contains placeholder text to verify that permissions, bucket policies, and object URLs are configured properly.
+
+If you can read this message in your web browser via the object's public link, your AWS S3 bucket configuration is successful.
+
+Status: OperationalAccess
+Type: Public Read-OnlySecurity
+Check: Verified
