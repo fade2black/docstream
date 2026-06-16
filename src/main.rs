@@ -1,7 +1,10 @@
 mod core;
+mod extractor;
 mod fetcher;
+
 use aws_sdk_s3::Client;
 
+use crate::extractor::Extractor;
 use crate::fetcher::Fetcher;
 use crate::fetcher::local_file::LocalFileFetcher;
 use crate::fetcher::retry::RetryFetcher;
@@ -15,6 +18,8 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let local_fetcher = LocalFileFetcher;
+    //let extractor = extractor::text::TextExtractor::new();
+    let extractor = extractor::pdf::PdfExtractor::new()?;
 
     let retry_fetcher = RetryFetcher::new(
         Arc::new(local_fetcher),
@@ -22,7 +27,8 @@ async fn main() -> anyhow::Result<()> {
         200, // base delay ms
     );
 
-    let doc = retry_fetcher.fetch("data/sample.txt").await?;
+    let doc = retry_fetcher.fetch("data/sample.pdf").await?;
+    let text = extractor.extract(&doc).await?;
 
     info!(
         "Fetched document: id={}, source={}, bytes={}",
@@ -31,6 +37,9 @@ async fn main() -> anyhow::Result<()> {
         doc.content.len()
     );
 
+    println!("Extracted text: {}", text);
+
+    info!("--------------------------------------------------------------------------");
     // Read from AWS S3
     let config = aws_config::load_from_env().await;
     let client = Client::new(&config);
