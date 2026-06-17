@@ -1,6 +1,5 @@
 use crate::core::Document;
-use crate::core::Result;
-use crate::fetcher::Fetcher;
+use crate::fetcher::{Fetcher, FetcherError};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
@@ -27,7 +26,7 @@ impl<F> Fetcher for RetryFetcher<F>
 where
     F: Fetcher + Send + Sync,
 {
-    async fn fetch(&self, doc_ref: &str) -> Result<Document> {
+    async fn fetch(&self, doc_ref: &str) -> Result<Document, FetcherError> {
         let mut attempt = 0;
 
         loop {

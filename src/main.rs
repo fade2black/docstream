@@ -48,11 +48,12 @@ async fn main() -> anyhow::Result<()> {
 
     let retry_fetcher = RetryFetcher::new(
         Arc::new(s3_fetcher),
-        3,   // max retries
+        5,   // max retries
         200, // base delay ms
     );
 
-    let doc = retry_fetcher.fetch("samples10dj37he:sample.txt").await?;
+    let doc = retry_fetcher.fetch("samples10dj37he:sample.pdf").await?;
+    let text = extractor.extract(&doc).await?;
 
     info!(
         "Fetched document: id={}, source={}, bytes={}",
@@ -60,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
         doc.source,
         doc.content.len()
     );
+    println!("Extracted text: {}", text);
 
     Ok(())
 }

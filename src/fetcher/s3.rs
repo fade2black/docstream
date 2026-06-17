@@ -1,5 +1,5 @@
-use crate::core::{Document, Result};
-use crate::fetcher::Fetcher;
+use crate::core::Document;
+use crate::fetcher::{Fetcher, FetcherError};
 
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
@@ -18,10 +18,10 @@ impl S3Fetcher {
 
 #[async_trait]
 impl Fetcher for S3Fetcher {
-    async fn fetch(&self, doc_ref: &str) -> Result<Document> {
+    async fn fetch(&self, doc_ref: &str) -> Result<Document, FetcherError> {
         let (bucket, key) = doc_ref
             .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("Invalid S3 doc_ref format"))?;
+            .ok_or_else(|| FetcherError::InvalidS3DocRefFormat)?;
 
         let response = self
             .client
@@ -29,14 +29,19 @@ impl Fetcher for S3Fetcher {
             .bucket(bucket)
             .key(key)
             .send()
-            .await?;
+            .await
+            .map_err(|e| FetcherError::ReadError(e.to_string()))?;
 
         let content_type = response
             .content_type()
             .unwrap_or("application/octet-stream")
             .to_string();
 
-        let bytes = response.body.collect().await?;
+        let bytes = response
+            .body
+            .collect()
+            .await
+            .map_err(|e| FetcherError::ReadError(e.to_string()))?;
 
         let content = Bytes::from(bytes.into_bytes());
 

@@ -1,5 +1,5 @@
-use crate::core::{Document, Result};
-use crate::fetcher::Fetcher;
+use crate::core::Document;
+use crate::fetcher::{Fetcher, FetcherError};
 use async_trait::async_trait;
 use bytes::Bytes;
 use uuid::Uuid;
@@ -8,8 +8,10 @@ pub struct LocalFileFetcher;
 
 #[async_trait]
 impl Fetcher for LocalFileFetcher {
-    async fn fetch(&self, doc_ref: &str) -> Result<Document> {
-        let data = tokio::fs::read(doc_ref).await?;
+    async fn fetch(&self, doc_ref: &str) -> Result<Document, FetcherError> {
+        let data = tokio::fs::read(doc_ref)
+            .await
+            .map_err(|e| FetcherError::ReadError(e.to_string()))?;
 
         let content = Bytes::from(data);
 

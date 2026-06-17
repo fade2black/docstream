@@ -1,5 +1,5 @@
-use crate::core::{Document, Result};
-use crate::extractor::Extractor;
+use crate::core::Document;
+use crate::extractor::{Extractor, ExtractorError};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -14,10 +14,9 @@ impl TextExtractor {
 
 #[async_trait]
 impl Extractor for TextExtractor {
-    async fn extract(&self, document: &Document) -> Result<String> {
+    async fn extract(&self, document: &Document) -> Result<String, ExtractorError> {
         // Take raw bytes and decode as UTF-8 text.
-        let text = std::str::from_utf8(document.content.as_ref())
-            .map_err(|e| anyhow!("Failed to decode UTF-8 text: {}", e))?;
+        let text = std::str::from_utf8(document.content.as_ref())?;
 
         Ok(text.to_owned())
     }
