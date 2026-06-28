@@ -1,67 +1,54 @@
-mod core;
-mod extractor;
-mod fetcher;
-
-use aws_sdk_s3::Client;
-
-use crate::extractor::Extractor;
-use crate::fetcher::Fetcher;
-use crate::fetcher::local_file::LocalFileFetcher;
-use crate::fetcher::retry::RetryFetcher;
-use crate::fetcher::s3::S3Fetcher;
-
+//use docstream::chunker;
+//use docstream::pipeline::Pipeline;
+//use docstream::core::Chunk;
+use docstream::chunker::simple::SimpleChunker;
+use docstream::config::loader::AppConfig;
+use docstream::core::DocumentJob;
+use docstream::embedder::local_embedder::LocalEmbedder;
+use docstream::extractor::text::TextExtractor;
+use docstream::fetcher::{local_file::LocalFileFetcher, retry::RetryFetcher};
+use docstream::pipeline::Pipeline;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let local_fetcher = LocalFileFetcher;
-    //let extractor = extractor::text::TextExtractor::new();
-    let extractor = extractor::pdf::PdfExtractor::new()?;
+    let app_config = AppConfig::from_file("config.toml").unwrap();
 
-    let retry_fetcher = RetryFetcher::new(
-        Arc::new(local_fetcher),
-        3,   // max retries
-        200, // base delay ms
-    );
+    info!("provider: {}", app_config.embedder.provider);
+    info!("endpoint: {}", app_config.embedder.endpoint);
+    info!("model: {}", app_config.embedder.model);
+    info!("api_key: {:?}", app_config.embedder.api_key);
 
-    let doc = retry_fetcher.fetch("data/sample.pdf").await?;
-    let text = extractor.extract(&doc).await?;
+    let embedder = Arc::new(LocalEmbedder::new(app_config.embedder));
+    let fetcher = Arc::new(RetryFetcher::new(Arc::new(LocalFileFetcher), 5, 750));
+    let extractor = Arc::new(TextExtractor::new());
+    let chunker = Arc::new(SimpleChunker::new());
+    let max_docs = 50;
+    let max_embeds = 100;
 
-    info!(
-        "Fetched document: id={}, source={}, bytes={}",
-        doc.id,
-        doc.source,
-        doc.content.len()
-    );
+    let pipeline = Pipeline::new(fetcher, extractor, chunker, embedder, max_docs, max_embeds);
+    let (doc_dispatcher, embed_dispatcher) = pipeline.run().await?;
 
-    println!("Extracted text: {}", text);
+    let job = DocumentJob {
+        doc_id: Uuid::new_v4(),
+        doc_ref: String::from("data/sample.txt"),
+    };
+    pipeline.push(job).await?;
 
-    info!("--------------------------------------------------------------------------");
-    // Read from AWS S3
-    let config = aws_config::load_from_env().await;
-    let client = Client::new(&config);
+    let job = DocumentJob {
+        doc_id: Uuid::new_v4(),
+        doc_ref: String::from("data/sample2.txt"),
+    };
+    pipeline.push(job).await?;
 
-    let s3_fetcher = S3Fetcher::new(client);
-
-    let retry_fetcher = RetryFetcher::new(
-        Arc::new(s3_fetcher),
-        5,   // max retries
-        200, // base delay ms
-    );
-
-    let doc = retry_fetcher.fetch("samples10dj37he:sample.pdf").await?;
-    let text = extractor.extract(&doc).await?;
-
-    info!(
-        "Fetched document: id={}, source={}, bytes={}",
-        doc.id,
-        doc.source,
-        doc.content.len()
-    );
-    println!("Extracted text: {}", text);
+    match tokio::try_join!(doc_dispatcher, embed_dispatcher) {
+        Ok(_) => info!("Pipeline completed successfully."),
+        Err(e) => error!("Error: {}", e),
+    }
 
     Ok(())
 }

@@ -1,10 +1,9 @@
-use crate::core::Document;
-use crate::fetcher::{Fetcher, FetcherError};
+use crate::core::DocumentJob;
+use crate::fetcher::{FetchedData, Fetcher, FetcherError};
 
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
 use bytes::Bytes;
-use uuid::Uuid;
 
 pub struct S3Fetcher {
     client: Client,
@@ -18,8 +17,9 @@ impl S3Fetcher {
 
 #[async_trait]
 impl Fetcher for S3Fetcher {
-    async fn fetch(&self, doc_ref: &str) -> Result<Document, FetcherError> {
-        let (bucket, key) = doc_ref
+    async fn fetch(&self, job: &DocumentJob) -> Result<FetchedData, FetcherError> {
+        let (bucket, key) = job
+            .doc_ref
             .split_once(':')
             .ok_or_else(|| FetcherError::InvalidS3DocRefFormat)?;
 
@@ -45,8 +45,7 @@ impl Fetcher for S3Fetcher {
 
         let content = Bytes::from(bytes.into_bytes());
 
-        Ok(Document {
-            id: Uuid::new_v4(),
+        Ok(FetchedData {
             source: format!("s3://{}/{}", bucket, key),
             content,
             content_type,

@@ -1,19 +1,51 @@
-use crate::core::Embedding;
+use crate::core::Chunk;
 
-pub mod fastembed;
+pub mod local_embedder;
+
+#[derive(Debug, serde::Deserialize)]
+pub struct EmbedderConfig {
+    pub provider: String,
+    pub endpoint: String,
+    pub model: String,
+    pub api_key: Option<String>,
+}
 
 #[async_trait::async_trait]
 pub trait Embedder: Send + Sync {
-    /// Generate an embedding vector for the given text.
-    /// `chunk_id` is the ID of the chunk being embedded.
-    ///
-    /// # Contract
-    /// Implementations **must** return a normalized (unit length) vector.
-    /// Normalization is the embedder's responsibility — the pipeline and
-    /// vector store rely on dot product as cosine similarity, which is only
-    /// correct when vectors have magnitude 1.0.
-    async fn embed(&mut self, chunk_id: uuid::Uuid, text: &str)
-    -> Result<Embedding, EmbedderError>;
+    /// Provider-specific endpoint
+    fn endpoint(&self) -> &str;
+
+    /// Provider-specific JSON request
+    fn build_request(&self, text: &str) -> Result<serde_json::Value, EmbedderError>;
+
+    /// Provider-specific JSON response parser
+    fn parse_response(&self, json: &serde_json::Value) -> Result<Vec<f32>, EmbedderError>;
+
+    /// Generic embedding logic (same for all providers)
+    async fn embed(&self, chunk: &Chunk) -> Result<Vec<f32>, EmbedderError> {
+        let text = &chunk.text;
+
+        if text.trim().is_empty() {
+            return Err(EmbedderError::EmptyText);
+        }
+
+        let body = self.build_request(text)?;
+
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(self.endpoint())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| EmbedderError::ApiError(e.to_string()))?;
+
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| EmbedderError::ApiError(e.to_string()))?;
+
+        self.parse_response(&json)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

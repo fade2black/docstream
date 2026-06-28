@@ -1,29 +1,27 @@
-use crate::core::Document;
-use crate::fetcher::{Fetcher, FetcherError};
+use crate::core::DocumentJob;
+use crate::fetcher::{FetchedData, Fetcher, FetcherError};
 use async_trait::async_trait;
 use bytes::Bytes;
-use uuid::Uuid;
 
 pub struct LocalFileFetcher;
 
 #[async_trait]
 impl Fetcher for LocalFileFetcher {
-    async fn fetch(&self, doc_ref: &str) -> Result<Document, FetcherError> {
-        let data = tokio::fs::read(doc_ref)
+    async fn fetch(&self, job: &DocumentJob) -> Result<FetchedData, FetcherError> {
+        let data = tokio::fs::read(&job.doc_ref)
             .await
             .map_err(|e| FetcherError::ReadError(e.to_string()))?;
 
         let content = Bytes::from(data);
 
-        let content_type = if doc_ref.ends_with(".pdf") {
+        let content_type = if job.doc_ref.ends_with(".pdf") {
             "application/pdf"
         } else {
             "text/plain"
         };
 
-        Ok(Document {
-            id: Uuid::new_v4(),
-            source: doc_ref.to_string(),
+        Ok(FetchedData {
+            source: job.doc_ref.clone(),
             content,
             content_type: content_type.to_string(),
         })

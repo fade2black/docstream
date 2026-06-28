@@ -1,9 +1,9 @@
-use crate::core::Document;
-use crate::fetcher::{Fetcher, FetcherError};
+use crate::core::DocumentJob;
+use crate::fetcher::{FetchedData, Fetcher, FetcherError};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
-use tracing::info;
+use tracing::{error, info};
 
 pub struct RetryFetcher<F> {
     fetcher: Arc<F>,
@@ -26,14 +26,18 @@ impl<F> Fetcher for RetryFetcher<F>
 where
     F: Fetcher + Send + Sync,
 {
-    async fn fetch(&self, doc_ref: &str) -> Result<Document, FetcherError> {
+    async fn fetch(&self, job: &DocumentJob) -> Result<FetchedData, FetcherError> {
         let mut attempt = 0;
 
         loop {
-            match self.fetcher.fetch(doc_ref).await {
+            match self.fetcher.fetch(job).await {
                 Ok(doc) => return Ok(doc),
                 Err(err) => {
                     if attempt >= self.max_retries {
+                        error!(
+                            "Fetch failed: doc_id={} after {} attempts",
+                            job.doc_id, attempt
+                        );
                         return Err(err);
                     }
 

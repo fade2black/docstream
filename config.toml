@@ -1,0 +1,5 @@
+[embedder]
+provider = "local"
+endpoint = "http://localhost:1234/v1/embeddings"
+model = "text-embedding-embeddinggemma-300m-qat"
+api_key = ""
