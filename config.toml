@@ -3,3 +3,8 @@ provider = "local"
 endpoint = "http://localhost:1234/v1/embeddings"
 model = "text-embedding-embeddinggemma-300m-qat"
 api_key = ""
+
+[qdrant]
+url = "https://de9e917c-eac3-4a60-8d3a-7492632d6ff2.eu-central-1-0.aws.cloud.qdrant.io"
+vector_size = 384
+collection_name = "stufenwerk_example"

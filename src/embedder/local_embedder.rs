@@ -1,4 +1,5 @@
-use crate::embedder::{Embedder, EmbedderConfig, EmbedderError};
+use crate::config::loader::EmbedderConfig;
+use crate::embedder::{Embedder, EmbedderError};
 
 #[derive(Debug)]
 pub struct LocalEmbedder {

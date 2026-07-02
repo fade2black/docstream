@@ -2,14 +2,6 @@ use crate::core::Chunk;
 
 pub mod local_embedder;
 
-#[derive(Debug, serde::Deserialize)]
-pub struct EmbedderConfig {
-    pub provider: String,
-    pub endpoint: String,
-    pub model: String,
-    pub api_key: Option<String>,
-}
-
 #[async_trait::async_trait]
 pub trait Embedder: Send + Sync {
     /// Provider-specific endpoint

@@ -18,18 +18,6 @@ pub struct Document {
     pub content_type: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Embedding {
-    /// The chunk this embedding was generated from
-    pub chunk_id: Uuid,
-
-    /// The vector representation (dimension depends on the model)
-    pub vector: Vec<f32>,
-
-    /// The model that produced this embedding, e.g. "text-embedding-3-small"
-    pub model_name: String,
-}
-
 /// Semantic chunk produced by chunker
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chunk {

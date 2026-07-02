@@ -1,12 +1,15 @@
 // I define here how it's wired
 
-//use crate::chunker::simple::SimpleChunker;
+use crate::chunker::simple::SimpleChunker;
+use crate::config::loader::AppConfig;
 use crate::core::Chunk;
 use crate::core::DocumentJob;
-//use crate::embedder::EmbedderConfig;
-// use crate::extractor::text::TextExtractor;
-// use crate::fetcher::local_file::LocalFileFetcher;
-// use crate::fetcher::retry::RetryFetcher;
+use crate::embedder::local_embedder::LocalEmbedder;
+use crate::extractor::text::TextExtractor;
+use crate::fetcher::{local_file::LocalFileFetcher, retry::RetryFetcher};
+use crate::store::VectorStoreError;
+use crate::store::qdrant::QdrantStore;
+
 use crate::prelude::*;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Semaphore, mpsc};
@@ -19,6 +22,7 @@ pub struct Pipeline {
     extractor: Arc<dyn Extractor>,
     chunker: Arc<dyn Chunker>,
     embedder: Arc<dyn Embedder>,
+    store: Arc<dyn VectorStore>,
 
     // Concurrency limits
     doc_semaphore: Arc<Semaphore>,
@@ -36,10 +40,17 @@ pub struct Pipeline {
 pub enum PipelineError {
     #[error("pipeline internal error: {0}")]
     Internal(String),
+    #[error("fetch error: {0}")]
+    VectorStoreError(#[from] VectorStoreError),
+}
+
+pub struct PipelineBuilder {
+    config: AppConfig,
 }
 
 impl Pipeline {
     pub fn new(
+        store: Arc<dyn VectorStore>,
         fetcher: Arc<dyn Fetcher>,
         extractor: Arc<dyn Extractor>,
         chunker: Arc<dyn Chunker>,
@@ -50,6 +61,7 @@ impl Pipeline {
         let (doc_tx, doc_rx) = mpsc::channel::<DocumentJob>(max_docs * 2);
         let (chunk_tx, chunk_rx) = mpsc::channel::<Chunk>(max_embeds * 4);
         Self {
+            store,
             fetcher,
             extractor,
             chunker,
@@ -77,7 +89,7 @@ impl Pipeline {
         Ok(())
     }
 
-    pub async fn run(&self) -> Result<(JoinHandle<()>, JoinHandle<()>), PipelineError> {
+    pub async fn spawn_workers(&self) -> Result<(JoinHandle<()>, JoinHandle<()>), PipelineError> {
         Ok((self.spawn_doc_dispatcher(), self.spawn_embed_dispatcher()))
     }
 
@@ -96,13 +108,19 @@ impl Pipeline {
                     let mut rx = doc_rx.lock().await;
                     match rx.recv().await {
                         Some(job) => job,
-                        None => break,
+                        None => {
+                            info!("No more jobs to process");
+                            break;
+                        }
                     }
                 };
 
                 let permit = match sem.clone().acquire_owned().await {
                     Ok(p) => p,
-                    Err(_) => break,
+                    Err(e) => {
+                        error!("Unable to acquire permit: {}", e);
+                        break;
+                    }
                 };
 
                 // Clone the necessary components for the worker body
@@ -130,6 +148,7 @@ impl Pipeline {
         let chunk_rx = self.chunk_rx.clone();
         let sem = self.embed_semaphore.clone();
         let embedder = self.embedder.clone();
+        let store = self.store.clone();
 
         tokio::spawn(async move {
             loop {
@@ -147,6 +166,7 @@ impl Pipeline {
                 };
 
                 let embedder = embedder.clone();
+                let store = store.clone();
 
                 info!("Spawning embedder worker: chunk_id={}", chunk.id);
                 tokio::spawn(async move {
@@ -157,8 +177,16 @@ impl Pipeline {
                             return;
                         }
                     };
-                    // Implement later: store embedding in database
-                    info!("vec=[{}, {}, ..., {}]", vec[0], vec[1], vec[vec.len() - 1]);
+
+                    info!(
+                        "Storing embedding: vec=[{},...], size={}",
+                        vec[0],
+                        vec.len()
+                    );
+
+                    if let Err(e) = store.insert(&vec, &chunk).await {
+                        info!("Failed to store embedding: {}", e);
+                    }
 
                     drop(permit);
                     info!("Embedder worker chunk_id={} completed", chunk.id);
@@ -168,134 +196,24 @@ impl Pipeline {
     }
 }
 
-// let doc_rx = self.doc_rx.clone();
-// let doc_semaphore = self.doc_semaphore.clone();
-// let fetcher = self.fetcher.clone();
-// let extractor = self.extractor.clone();
-// let chunker = self.chunker.clone();
-// let chunk_tx = self.chunk_tx.clone();
+impl PipelineBuilder {
+    pub fn new(config: AppConfig) -> Self {
+        Self { config }
+    }
 
-// tokio::spawn(async move {
-//     loop {
-//         let mut rx = doc_rx.lock().await;
+    pub async fn build(self) -> Result<Pipeline, PipelineError> {
+        let embedder = Arc::new(LocalEmbedder::new(self.config.embedder));
 
-//         let job = match rx.recv().await {
-//             Some(job) => job,
-//             None => break,
-//         };
+        let fetcher = Arc::new(RetryFetcher::new(Arc::new(LocalFileFetcher), 5, 750));
 
-//         let permit = match doc_semaphore.clone().acquire_owned().await {
-//             Ok(p) => p,
-//             Err(_) => break,
-//         };
+        let extractor = Arc::new(TextExtractor::new());
 
-//         let fetcher = fetcher.clone();
-//         let extractor = extractor.clone();
-//         let chunker = chunker.clone();
-//         let chunk_tx = chunk_tx.clone();
+        let chunker = Arc::new(SimpleChunker::new());
 
-//         tokio::spawn(async move {
-//             // doc worker will go here
-//             drop(permit);
-//         });
-//     }
-// });
+        let store = Arc::new(QdrantStore::new(self.config.qdrant).await?);
 
-// use crate::chunker::simple::SimpleChunker;
-// use crate::core::Chunk;
-// use crate::extractor::text::TextExtractor;
-// use crate::fetcher::local_file::LocalFileFetcher;
-// use crate::fetcher::retry::RetryFetcher;
-// use crate::prelude::*;
-
-// pub struct Pipeline {
-//     doc_ref: String,
-// }
-
-// impl Pipeline {
-//     pub fn new(doc_ref: impl Into<String>) -> Self {
-//         Self {
-//             doc_ref: doc_ref.into(),
-//         }
-//     }
-
-//     pub async fn run(self) -> anyhow::Result<()> {
-//         let (tx, mut rx) = tokio::sync::mpsc::channel::<Chunk>(100);
-
-//         tokio::spawn(async move {
-//             while let Some(chunk) = rx.recv().await {
-//                 tracing::info!(
-//                     "chunk: doc={}, id={}, text={}",
-//                     chunk.doc_id,
-//                     chunk.id,
-//                     chunk.text
-//                 )
-//             }
-//         });
-
-//         let fetcher = RetryFetcher::new(std::sync::Arc::new(LocalFileFetcher), 3, 200);
-
-//         let extractor = TextExtractor::new();
-//         let chunker = SimpleChunker::new();
-
-//         let worker = DocWorker::new(fetcher, extractor, chunker);
-
-//         worker.process(&self.doc_ref, tx).await?;
-
-//         Ok(())
-//     }
-// }
-
-// use crate::prelude::*;
-// use std::sync::Arc;
-// use tokio::sync::mpsc;
-// use tracing::info;
-
-// use crate::chunker::simple::SimpleChunker;
-// use crate::extractor::text::TextExtractor;
-// use crate::fetcher::local_file::LocalFileFetcher;
-// use crate::fetcher::retry::RetryFetcher;
-
-// pub struct Pipeline;
-
-// impl Pipeline {
-//     pub fn new() -> Self {
-//         Self
-//     }
-
-//     pub async fn run(&self) -> anyhow::Result<()> {
-//         // 1. Channel (pipeline boundary: chunk → next stage)
-//         let (tx, mut rx) = mpsc::channel::<Chunk>(100);
-
-//         // 2. Receiver (temporary: logs chunks)
-//         tokio::spawn(async move {
-//             info!("[RECEIVER] started");
-
-//             while let Some(chunk) = rx.recv().await {
-//                 info!(
-//                     "RECEIVER: doc_id={}, chunk_id={}, text={}",
-//                     chunk.doc_id, chunk.id, chunk.text
-//                 );
-//             }
-//         });
-
-//         // 3. Components
-//         let local_fetcher = LocalFileFetcher;
-
-//         let retry_fetcher = RetryFetcher::new(Arc::new(local_fetcher), 3, 200);
-
-//         let extractor = TextExtractor::new();
-//         let chunker = SimpleChunker::new();
-
-//         // 4. Worker
-//         let worker = DocWorker::new(retry_fetcher, extractor, chunker);
-
-//         // 5. Run pipeline
-//         worker.process("data/sample.txt", tx).await?;
-
-//         // 6. keep process alive for debug visibility (temporary)
-//         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-//         Ok(())
-//     }
-// }
+        Ok(Pipeline::new(
+            store, fetcher, extractor, chunker, embedder, 50, 100,
+        ))
+    }
+}
