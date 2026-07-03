@@ -4,9 +4,11 @@ use crate::chunker::simple::SimpleChunker;
 use crate::config::loader::AppConfig;
 use crate::core::Chunk;
 use crate::core::DocumentJob;
+use crate::embedder::EmbedderError;
 use crate::embedder::local_embedder::LocalEmbedder;
 use crate::extractor::text::TextExtractor;
 use crate::fetcher::{local_file::LocalFileFetcher, retry::RetryFetcher};
+use crate::store::SearchResult;
 use crate::store::VectorStoreError;
 use crate::store::qdrant::QdrantStore;
 
@@ -40,8 +42,10 @@ pub struct Pipeline {
 pub enum PipelineError {
     #[error("pipeline internal error: {0}")]
     Internal(String),
-    #[error("fetch error: {0}")]
+    #[error("vector store error: {0}")]
     VectorStoreError(#[from] VectorStoreError),
+    #[error("embedder error: {0}")]
+    EmbedderError(#[from] EmbedderError),
 }
 
 pub struct PipelineBuilder {
@@ -87,6 +91,16 @@ impl Pipeline {
 
         info!("Doc worker: doc_id={} started", doc_id);
         Ok(())
+    }
+
+    pub async fn search(
+        &self,
+        text: &str,
+        top_k: usize,
+    ) -> Result<Vec<SearchResult>, PipelineError> {
+        let embedding = self.embedder.embed(text).await?;
+        let results = self.store.search(&embedding, top_k).await?;
+        Ok(results)
     }
 
     pub async fn spawn_workers(&self) -> Result<(JoinHandle<()>, JoinHandle<()>), PipelineError> {
@@ -170,7 +184,7 @@ impl Pipeline {
 
                 info!("Spawning embedder worker: chunk_id={}", chunk.id);
                 tokio::spawn(async move {
-                    let vec = match embedder.embed(&chunk).await {
+                    let vec = match embedder.embed(&chunk.text).await {
                         Ok(vec) => vec,
                         Err(e) => {
                             error!("Failed to embed chunk: {:?}", e);

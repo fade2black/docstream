@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Represents a job to process a document
@@ -24,4 +25,10 @@ pub struct Chunk {
     pub id: Uuid,
     pub doc_id: Uuid,
     pub text: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Metadata {
+    /// Arbitrary key-value pairs attached to a chunk
+    pub fields: HashMap<String, serde_json::Value>,
 }

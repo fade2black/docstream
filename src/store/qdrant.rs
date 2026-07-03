@@ -1,13 +1,16 @@
 use crate::config::loader::QdrantConfig;
 use crate::core::Chunk;
-use crate::store::{VectorStore, VectorStoreError};
+use crate::store::{ChunkMetadata, SearchResult, VectorStore, VectorStoreError};
 use qdrant_client::Payload;
 use qdrant_client::Qdrant;
+use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::qdrant::{
-    CreateCollectionBuilder, Distance, PointStruct, UpsertPointsBuilder, VectorParamsBuilder,
+    CreateCollectionBuilder, Distance, PointId, PointStruct, QueryPointsBuilder, ScoredPoint,
+    UpsertPointsBuilder, VectorInput, VectorParamsBuilder,
 };
 use std::collections::HashMap;
 use tracing::info;
+use uuid::Uuid;
 
 pub struct QdrantStore {
     client: Qdrant,
@@ -50,6 +53,36 @@ impl QdrantStore {
             collection_name: config.collection_name,
         })
     }
+
+    fn map_search_result(point: ScoredPoint) -> Result<SearchResult, VectorStoreError> {
+        Ok(SearchResult {
+            chunk_id: Self::parse_chunk_id(point.id)?,
+            score: point.score,
+            metadata: Self::parse_metadata(point.payload)?,
+        })
+    }
+
+    fn parse_chunk_id(id: Option<PointId>) -> Result<Uuid, VectorStoreError> {
+        match id.and_then(|id| id.point_id_options) {
+            Some(PointIdOptions::Uuid(s)) => {
+                Uuid::parse_str(&s).map_err(|_| VectorStoreError::InvalidId(s))
+            }
+            _ => Err(VectorStoreError::MissingId),
+        }
+    }
+
+    fn parse_metadata(
+        payload: HashMap<String, qdrant_client::qdrant::Value>,
+    ) -> Result<ChunkMetadata, VectorStoreError> {
+        let json = serde_json::Value::Object(
+            payload
+                .into_iter()
+                .map(|(k, v)| (k, v.into_json()))
+                .collect(),
+        );
+
+        serde_json::from_value(json).map_err(|e| VectorStoreError::SearchError(e.to_string()))
+    }
 }
 
 #[async_trait::async_trait]
@@ -72,5 +105,28 @@ impl VectorStore for QdrantStore {
             .map_err(|e| VectorStoreError::StoreError(e.to_string()))?;
 
         Ok(())
+    }
+
+    async fn search(
+        &self,
+        vec: &[f32],
+        top_k: usize,
+    ) -> Result<Vec<SearchResult>, VectorStoreError> {
+        let query = QueryPointsBuilder::new(&self.collection_name)
+            .query(VectorInput::new_dense(vec.to_vec()))
+            .limit(top_k as u64)
+            .with_payload(true);
+
+        let response = self
+            .client
+            .query(query)
+            .await
+            .map_err(|e| VectorStoreError::SearchError(e.to_string()))?;
+
+        response
+            .result
+            .into_iter()
+            .map(Self::map_search_result)
+            .collect()
     }
 }

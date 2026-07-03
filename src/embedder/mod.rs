@@ -1,5 +1,3 @@
-use crate::core::Chunk;
-
 pub mod local_embedder;
 
 #[async_trait::async_trait]
@@ -14,9 +12,7 @@ pub trait Embedder: Send + Sync {
     fn parse_response(&self, json: &serde_json::Value) -> Result<Vec<f32>, EmbedderError>;
 
     /// Generic embedding logic (same for all providers)
-    async fn embed(&self, chunk: &Chunk) -> Result<Vec<f32>, EmbedderError> {
-        let text = &chunk.text;
-
+    async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedderError> {
         if text.trim().is_empty() {
             return Err(EmbedderError::EmptyText);
         }

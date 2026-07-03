@@ -1,8 +1,8 @@
 use docstream::config::loader::AppConfig;
-use docstream::core::DocumentJob;
+//use docstream::core::DocumentJob;
 use docstream::pipeline::PipelineBuilder;
-use tracing::{error, info};
-use uuid::Uuid;
+use tracing::info;
+//use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -19,25 +19,31 @@ async fn main() -> anyhow::Result<()> {
     info!("qdrant: {:?}", app_config.qdrant);
 
     let pipeline = PipelineBuilder::new(app_config).build().await?;
-    let (doc_dispatcher, embed_dispatcher) = pipeline.spawn_workers().await?;
+    //let (doc_dispatcher, embed_dispatcher) = pipeline.spawn_workers().await?;
 
     //////////
-    let job = DocumentJob {
-        doc_id: Uuid::new_v4(),
-        doc_ref: String::from("data/sample.txt"),
-    };
-    pipeline.push(job).await?;
+    // let job = DocumentJob {
+    //     doc_id: Uuid::new_v4(),
+    //     doc_ref: String::from("data/sample.txt"),
+    // };
+    // pipeline.push(job).await?;
 
-    let job = DocumentJob {
-        doc_id: Uuid::new_v4(),
-        doc_ref: String::from("data/sample2.txt"),
-    };
-    pipeline.push(job).await?;
+    // let job = DocumentJob {
+    //     doc_id: Uuid::new_v4(),
+    //     doc_ref: String::from("data/sample2.txt"),
+    // };
+    // pipeline.push(job).await?;
 
-    match tokio::try_join!(doc_dispatcher, embed_dispatcher) {
-        Ok(_) => info!("Pipeline completed successfully."),
-        Err(e) => error!("Error: {}", e),
+    let search_result = pipeline.search("My strange dream", 7).await?;
+    for result in search_result {
+        info!("chunk_id: {}, score: {}", result.chunk_id, result.score);
+        println!("   doc_id: {:?}", result.metadata.document_id);
+        println!("   text: {:?}", result.metadata.text);
     }
+    // match tokio::try_join!(doc_dispatcher, embed_dispatcher) {
+    //     Ok(_) => info!("Pipeline completed successfully."),
+    //     Err(e) => error!("Error: {}", e),
+    // }
 
     Ok(())
 }
