@@ -57,3 +57,53 @@ impl crate::chunker::Chunker for SimpleChunker {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunker::Chunker;
+
+    #[tokio::test]
+    async fn empty_content_is_rejected() {
+        let chunker = SimpleChunker::new();
+        let (tx, mut rx) = mpsc::channel(4);
+
+        let result = chunker.chunk("   \n  ", Uuid::new_v4(), tx).await;
+
+        assert!(matches!(result, Err(ChunkerError::EmptyContent)));
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn pairs_sentences_into_chunks() {
+        let chunker = SimpleChunker::new();
+        let (tx, mut rx) = mpsc::channel(4);
+        let source_id = Uuid::new_v4();
+
+        let content = "The cat sat on the mat. The dog barked loudly. \
+                        Birds flew away quickly. The sun set slowly.";
+
+        let result = chunker.chunk(content, source_id, tx).await;
+        assert!(result.is_ok());
+
+        let mut chunks = Vec::new();
+        while let Some(chunk) = rx.recv().await {
+            chunks.push(chunk);
+        }
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(
+            chunks[0].text,
+            "The cat sat on the mat.  The dog barked loudly. "
+        );
+        assert_eq!(
+            chunks[1].text,
+            "Birds flew away quickly.  The sun set slowly."
+        );
+
+        for chunk in &chunks {
+            assert_eq!(chunk.doc_id, source_id);
+        }
+        assert_ne!(chunks[0].id, chunks[1].id);
+    }
+}

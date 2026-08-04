@@ -130,3 +130,76 @@ impl VectorStore for QdrantStore {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use qdrant_client::qdrant::Value;
+    use serde_json::json;
+
+    #[test]
+    fn parse_metadata_accepts_valid_payload() {
+        let mut payload = HashMap::new();
+        payload.insert("text".to_string(), Value::from(json!("hello world")));
+        payload.insert("document_id".to_string(), Value::from(json!("doc-123")));
+
+        let result = QdrantStore::parse_metadata(payload);
+
+        assert_eq!(
+            result.unwrap(),
+            ChunkMetadata {
+                text: "hello world".to_string(),
+                document_id: "doc-123".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_metadata_rejects_missing_field() {
+        let mut payload = HashMap::new();
+        payload.insert("text".to_string(), Value::from(json!("hello world")));
+        // "document_id" intentionally omitted
+
+        let result = QdrantStore::parse_metadata(payload);
+
+        assert!(matches!(result, Err(VectorStoreError::SearchError(_))));
+    }
+
+    #[test]
+    fn parse_chunk_id_accepts_valid_uuid() {
+        let uuid = Uuid::new_v4();
+        let point_id = PointId {
+            point_id_options: Some(PointIdOptions::Uuid(uuid.to_string())),
+        };
+
+        let result = QdrantStore::parse_chunk_id(Some(point_id));
+
+        assert_eq!(result.unwrap(), uuid);
+    }
+
+    #[test]
+    fn parse_chunk_id_rejects_invalid_uuid() {
+        let point_id = PointId {
+            point_id_options: Some(PointIdOptions::Uuid("not-a-uuid".to_string())),
+        };
+
+        let result = QdrantStore::parse_chunk_id(Some(point_id));
+
+        assert!(matches!(
+            result,
+            Err(VectorStoreError::InvalidId(ref s)) if s == "not-a-uuid"
+        ));
+    }
+
+    #[test]
+    fn parse_chunk_id_rejects_missing_or_wrong_type() {
+        let none_result = QdrantStore::parse_chunk_id(None);
+        assert!(matches!(none_result, Err(VectorStoreError::MissingId)));
+
+        let numeric_point_id = PointId {
+            point_id_options: Some(PointIdOptions::Num(42)),
+        };
+        let numeric_result = QdrantStore::parse_chunk_id(Some(numeric_point_id));
+        assert!(matches!(numeric_result, Err(VectorStoreError::MissingId)));
+    }
+}

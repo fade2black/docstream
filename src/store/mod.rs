@@ -12,7 +12,7 @@ pub struct QdrantConfig {
     pub api_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChunkMetadata {
     pub text: String,
     pub document_id: String,
