@@ -11,6 +11,9 @@ pub trait Embedder: Send + Sync {
     /// Provider-specific JSON response parser
     fn parse_response(&self, json: &serde_json::Value) -> Result<Vec<f32>, EmbedderError>;
 
+    /// Provider-specific HTTP client
+    fn client(&self) -> &reqwest::Client;
+
     /// Generic embedding logic (same for all providers)
     async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedderError> {
         if text.trim().is_empty() {
@@ -19,7 +22,7 @@ pub trait Embedder: Send + Sync {
 
         let body = self.build_request(text)?;
 
-        let client = reqwest::Client::new();
+        let client = self.client();
         let resp = client
             .post(self.endpoint())
             .json(&body)

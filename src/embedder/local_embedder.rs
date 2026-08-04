@@ -3,11 +3,13 @@ use crate::embedder::{Embedder, EmbedderError};
 
 #[derive(Debug)]
 pub struct LocalEmbedder {
+    client: reqwest::Client,
     pub config: EmbedderConfig,
 }
+
 impl LocalEmbedder {
     pub fn new(config: EmbedderConfig) -> Self {
-        Self { config }
+        Self { client: reqwest::Client::new(), config }
     }
 }
 
@@ -38,5 +40,9 @@ impl Embedder for LocalEmbedder {
         }
 
         Ok(vec)
+    }
+
+    fn client(&self) -> &reqwest::Client {
+        &self.client
     }
 }
