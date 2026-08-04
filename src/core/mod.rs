@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Represents a job to process a document
+/// If, in the future, clients need idempotency (e.g., safely retrying the same request),
+/// we could allow them to provide an ID or an idempotency key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentJob {
     pub doc_id: Uuid,

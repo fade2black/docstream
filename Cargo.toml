@@ -24,3 +24,4 @@ uuid = { version = "1.23.3", features = ["serde", "v4"] }
 toml = "1.1.2"
 qdrant-client = "1.18.0"
 dotenvy = "0.15.7"
+axum = { version = "0.7.9", features = ["json"] }

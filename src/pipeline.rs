@@ -82,14 +82,15 @@ impl Pipeline {
         }
     }
 
-    pub async fn push(&self, job: DocumentJob) -> Result<(), PipelineError> {
+    pub async fn ingest(&self, job: DocumentJob) -> Result<(), PipelineError> {
         let doc_id = job.doc_id;
         self.doc_tx
             .send(job)
             .await
             .map_err(|e| PipelineError::Internal(format!("doc_tx closed: {}", e)))?;
 
-        info!("Doc worker: doc_id={} started", doc_id);
+        info!("Doc ingest: doc_id={} queued", doc_id);
+
         Ok(())
     }
 
@@ -103,8 +104,8 @@ impl Pipeline {
         Ok(results)
     }
 
-    pub async fn spawn_workers(&self) -> Result<(JoinHandle<()>, JoinHandle<()>), PipelineError> {
-        Ok((self.spawn_doc_dispatcher(), self.spawn_embed_dispatcher()))
+    pub fn spawn_workers(&self) -> (JoinHandle<()>, JoinHandle<()>) {
+        (self.spawn_doc_dispatcher(), self.spawn_embed_dispatcher())
     }
 
     fn spawn_doc_dispatcher(&self) -> JoinHandle<()> {
@@ -116,6 +117,7 @@ impl Pipeline {
         let chunker = self.chunker.clone();
         let chunk_tx = self.chunk_tx.clone();
 
+        info!("spawning doc dispatcher");
         tokio::spawn(async move {
             loop {
                 let job = {
@@ -164,6 +166,7 @@ impl Pipeline {
         let embedder = self.embedder.clone();
         let store = self.store.clone();
 
+        info!("spawning embed dispatcher");
         tokio::spawn(async move {
             loop {
                 let chunk = {

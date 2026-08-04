@@ -1,8 +1,10 @@
 use docstream::config::loader::AppConfig;
-//use docstream::core::DocumentJob;
 use docstream::pipeline::PipelineBuilder;
+use docstream::rest::router;
+use docstream::rest::state::AppState;
+use std::sync::Arc;
+use tokio::net::TcpListener;
 use tracing::info;
-//use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -12,38 +14,56 @@ async fn main() -> anyhow::Result<()> {
         .unwrap();
 
     let app_config = AppConfig::from_env()?;
+    let pipeline = Arc::new(PipelineBuilder::new(app_config).build().await?);
 
-    info!("provider: {}", app_config.embedder.provider);
-    info!("endpoint: {}", app_config.embedder.endpoint);
-    info!("model: {}", app_config.embedder.model);
-    info!("qdrant: {:?}", app_config.qdrant);
+    let (doc_worker, embed_worker) = pipeline.spawn_workers();
 
-    let pipeline = PipelineBuilder::new(app_config).build().await?;
-    //let (doc_dispatcher, embed_dispatcher) = pipeline.spawn_workers().await?;
+    let state = AppState {
+        pipeline: pipeline.clone(),
+    };
 
-    //////////
-    // let job = DocumentJob {
-    //     doc_id: Uuid::new_v4(),
-    //     doc_ref: String::from("data/sample.txt"),
-    // };
-    // pipeline.push(job).await?;
+    let app = router::router(state);
+    let listener = TcpListener::bind("127.0.0.1:3000").await?;
 
-    // let job = DocumentJob {
-    //     doc_id: Uuid::new_v4(),
-    //     doc_ref: String::from("data/sample2.txt"),
-    // };
-    // pipeline.push(job).await?;
+    info!("REST server listening on http://127.0.0.1:3000");
 
-    let search_result = pipeline.search("My strange dream", 7).await?;
-    for result in search_result {
-        info!("chunk_id: {}, score: {}", result.chunk_id, result.score);
-        println!("   doc_id: {:?}", result.metadata.document_id);
-        println!("   text: {:?}", result.metadata.text);
+    tokio::select! {
+        res = axum::serve(listener, app) => {
+            res?;
+        }
+        _ = doc_worker => {
+            panic!("doc worker exited unexpectedly");
+        }
+        _ = embed_worker => {
+            panic!("embed worker exited unexpectedly");
+        }
     }
-    // match tokio::try_join!(doc_dispatcher, embed_dispatcher) {
-    //     Ok(_) => info!("Pipeline completed successfully."),
-    //     Err(e) => error!("Error: {}", e),
-    // }
 
     Ok(())
 }
+
+//////////
+//use docstream::core::DocumentJob;
+//
+// let job = DocumentJob {
+//     doc_id: Uuid::new_v4(),
+//     doc_ref: String::from("data/sample.txt"),
+// };
+// pipeline.push(job).await?;
+
+// let job = DocumentJob {
+//     doc_id: Uuid::new_v4(),
+//     doc_ref: String::from("data/sample2.txt"),
+// };
+// pipeline.push(job).await?;
+
+// let search_result = pipeline.search("My strange dream", 7).await?;
+// for result in search_result {
+//     info!("chunk_id: {}, score: {}", result.chunk_id, result.score);
+//     println!("   doc_id: {:?}", result.metadata.document_id);
+//     println!("   text: {:?}", result.metadata.text);
+//}
+// match tokio::try_join!(doc_dispatcher, embed_dispatcher) {
+//     Ok(_) => info!("Pipeline completed successfully."),
+//     Err(e) => error!("Error: {}", e),
+// }
