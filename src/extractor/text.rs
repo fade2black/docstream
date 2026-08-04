@@ -2,6 +2,7 @@ use crate::core::Document;
 use crate::extractor::{Extractor, ExtractorError};
 use async_trait::async_trait;
 
+#[derive(Default)]
 pub struct TextExtractor;
 
 impl TextExtractor {

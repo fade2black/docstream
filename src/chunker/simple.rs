@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+#[derive(Default)]
 pub struct SimpleChunker;
 
 impl SimpleChunker {
@@ -45,11 +46,6 @@ impl crate::chunker::Chunker for SimpleChunker {
                 doc_id: source_id,
                 text,
             };
-
-            // info!(
-            //     "doc_id={}, chunk_id={}, text={}",
-            //     chunk.doc_id, chunk.id, chunk.text
-            // );
 
             tx.send(chunk)
                 .await

@@ -18,7 +18,7 @@ Derived from `REVIEW.md`. Sequenced by what should logically be fixed first: cra
 
 8. **Move hardcoded magic numbers into `AppConfig`** — retry count/backoff (`pipeline.rs:224`), concurrency limits (`:232-234`), channel-buffer multipliers, and chunking window/size/overlap in `chunker/simple.rs`.
 
-9. **Reuse a single `reqwest::Client`** in the embedder instead of constructing one per call (`embedder/mod.rs:22`).
+9. **Reuse a single `reqwest::Client`** in the embedder instead of constructing one per call (`embedder/mod.rs:22`). ✅
 
 10. **Deduplicate the dispatcher loops** — extract `spawn_doc_dispatcher`/`spawn_embed_dispatcher`'s shared recv/acquire/spawn/log pattern into one generic helper.
 

@@ -1,6 +1,5 @@
 #[derive(Debug, serde::Deserialize)]
 pub struct EmbedderConfig {
-    pub provider: String,
     pub endpoint: String,
     pub model: String,
     pub api_key: Option<String>,
@@ -29,7 +28,7 @@ pub struct AppConfig {
 
 #[derive(Debug)]
 pub enum ConfigError {
-    UnableToLoadFromFlle(String),
+    UnableToLoadFromFile(String),
 }
 
 impl AppConfig {
@@ -38,7 +37,6 @@ impl AppConfig {
         dotenvy::dotenv().ok();
 
         let embedder = EmbedderConfig {
-            provider: std::env::var("EMBEDDER_PROVIDER")?,
             endpoint: std::env::var("EMBEDDER_ENDPOINT")?,
             model: std::env::var("EMBEDDER_MODEL")?,
             api_key: std::env::var("EMBEDDER_API_KEY").ok(),

@@ -103,7 +103,7 @@ classDiagram
     Pipeline --> VectorStore
 ```
 
-**Actually wired today** (`PipelineBuilder::build()` in `pipeline.rs`): `LocalFileFetcher` wrapped in `RetryFetcher` (5 retries, 750ms base exponential backoff) → `TextExtractor` (raw UTF-8 decode) → `SimpleChunker` (naive 2-sentence sliding window, step 2, no overlap, no size cap) → `LocalEmbedder` (generic HTTP embedding client, provider configured via env) → `QdrantStore`.
+**Actually wired today** (`PipelineBuilder::build()` in `pipeline.rs`): `LocalFileFetcher` wrapped in `RetryFetcher` (5 retries, 750ms base exponential backoff) → `TextExtractor` (raw UTF-8 decode) → `SimpleChunker` (naive 2-sentence sliding window, step 2, no overlap, no size cap) → `LocalEmbedder` (generic HTTP embedding client) → `QdrantStore`.
 
 `S3Fetcher` and `PdfExtractor` are fully implemented but never constructed anywhere outside their own files — ingesting a PDF or an S3-hosted document does not currently work, regardless of `doc_ref` format.
 
@@ -233,7 +233,6 @@ Loaded once at startup via `AppConfig::from_env()` (`src/config/loader.rs`); `.e
 
 | Var | Purpose |
 |---|---|
-| `EMBEDDER_PROVIDER` | Free-text label, currently unused by `LocalEmbedder` (vestigial) |
 | `EMBEDDER_ENDPOINT` | HTTP endpoint the embedder POSTs `{input, model}` to |
 | `EMBEDDER_MODEL` | Model name sent in the embed request body |
 | `EMBEDDER_API_KEY` | *Optional* — not currently sent as an auth header anywhere in `LocalEmbedder` |

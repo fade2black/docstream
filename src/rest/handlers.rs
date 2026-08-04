@@ -52,7 +52,7 @@ pub async fn ingest_document(
 
     match state.pipeline.ingest(job).await {
         Ok(_) => {
-            info!("doc_id={} queued for injestion", doc_id);
+            info!("doc_id={} queued for ingestion", doc_id);
             StatusCode::ACCEPTED
         }
         Err(err) => {

@@ -3,7 +3,6 @@ use crate::fetcher::{FetchedData, Fetcher, FetcherError};
 
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
-use bytes::Bytes;
 
 pub struct S3Fetcher {
     client: Client,
@@ -21,7 +20,7 @@ impl Fetcher for S3Fetcher {
         let (bucket, key) = job
             .doc_ref
             .split_once(':')
-            .ok_or_else(|| FetcherError::InvalidS3DocRefFormat)?;
+            .ok_or(FetcherError::InvalidS3DocRefFormat)?;
 
         let response = self
             .client
@@ -43,7 +42,7 @@ impl Fetcher for S3Fetcher {
             .await
             .map_err(|e| FetcherError::ReadError(e.to_string()))?;
 
-        let content = Bytes::from(bytes.into_bytes());
+        let content = bytes.into_bytes();
 
         Ok(FetchedData {
             source: format!("s3://{}/{}", bucket, key),

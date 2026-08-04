@@ -41,29 +41,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-//////////
-//use docstream::core::DocumentJob;
-//
-// let job = DocumentJob {
-//     doc_id: Uuid::new_v4(),
-//     doc_ref: String::from("data/sample.txt"),
-// };
-// pipeline.push(job).await?;
-
-// let job = DocumentJob {
-//     doc_id: Uuid::new_v4(),
-//     doc_ref: String::from("data/sample2.txt"),
-// };
-// pipeline.push(job).await?;
-
-// let search_result = pipeline.search("My strange dream", 7).await?;
-// for result in search_result {
-//     info!("chunk_id: {}, score: {}", result.chunk_id, result.score);
-//     println!("   doc_id: {:?}", result.metadata.document_id);
-//     println!("   text: {:?}", result.metadata.text);
-//}
-// match tokio::try_join!(doc_dispatcher, embed_dispatcher) {
-//     Ok(_) => info!("Pipeline completed successfully."),
-//     Err(e) => error!("Error: {}", e),
-// }
