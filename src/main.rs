@@ -4,7 +4,7 @@ use docstream::rest::router;
 use docstream::rest::state::AppState;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tracing::info;
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -32,10 +32,12 @@ async fn main() -> anyhow::Result<()> {
             res?;
         }
         _ = doc_worker => {
-            panic!("doc worker exited unexpectedly");
+            error!("doc worker exited unexpectedly");
+            anyhow::bail!("doc worker exited unexpectedly");
         }
         _ = embed_worker => {
-            panic!("embed worker exited unexpectedly");
+            error!("embed worker exited unexpectedly");
+            anyhow::bail!("embed worker exited unexpectedly");
         }
     }
 

@@ -9,7 +9,10 @@ pub struct LocalEmbedder {
 
 impl LocalEmbedder {
     pub fn new(config: EmbedderConfig) -> Self {
-        Self { client: reqwest::Client::new(), config }
+        Self {
+            client: reqwest::Client::new(),
+            config,
+        }
     }
 }
 
