@@ -19,6 +19,10 @@ impl<F> RetryFetcher<F> {
             base_delay_ms,
         }
     }
+
+    fn backoff_delay_ms(base_delay_ms: u64, attempt: u32) -> u64 {
+        base_delay_ms * 2u64.pow(attempt)
+    }
 }
 
 #[async_trait]
@@ -41,7 +45,7 @@ where
                         return Err(err);
                     }
 
-                    let delay = self.base_delay_ms * 2u64.pow(attempt as u32);
+                    let delay = Self::backoff_delay_ms(self.base_delay_ms, attempt as u32);
                     sleep(Duration::from_millis(delay)).await;
 
                     attempt += 1;
@@ -49,5 +53,20 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backoff_delay_grows_exponentially() {
+        let base_delay_ms = 100;
+
+        assert_eq!(RetryFetcher::<()>::backoff_delay_ms(base_delay_ms, 0), 100);
+        assert_eq!(RetryFetcher::<()>::backoff_delay_ms(base_delay_ms, 1), 200);
+        assert_eq!(RetryFetcher::<()>::backoff_delay_ms(base_delay_ms, 2), 400);
+        assert_eq!(RetryFetcher::<()>::backoff_delay_ms(base_delay_ms, 3), 800);
     }
 }
