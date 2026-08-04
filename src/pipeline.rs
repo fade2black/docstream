@@ -144,17 +144,25 @@ impl Pipeline {
                 let extractor = extractor.clone();
                 let chunker = chunker.clone();
                 let chunk_tx = chunk_tx.clone();
+                let doc_id = job.doc_id;
 
-                info!("Spawning doc worker: doc_id={}", job.doc_id);
-                tokio::spawn(async move {
+                info!("Spawning doc worker: doc_id={}", doc_id);
+
+                let handle = tokio::spawn(async move {
                     let worker = DocWorker::new(fetcher, extractor, chunker);
 
                     if let Err(e) = worker.process(&job, chunk_tx).await {
-                        error!("Doc worker doc_id={} failed: {}", job.doc_id, e);
+                        error!("Doc worker doc_id={} failed: {}", doc_id, e);
                     }
                     drop(permit);
 
-                    info!("Doc worker doc_id={} completed", job.doc_id);
+                    info!("Doc worker doc_id={} completed", doc_id);
+                });
+
+                tokio::spawn(async move {
+                    if let Err(e) = handle.await {
+                        error!("doc worker task panicked: doc_id={} err={:?}", doc_id, e);
+                    }
                 });
             }
         })
@@ -167,6 +175,7 @@ impl Pipeline {
         let store = self.store.clone();
 
         info!("spawning embed dispatcher");
+
         tokio::spawn(async move {
             loop {
                 let chunk = {
@@ -184,9 +193,11 @@ impl Pipeline {
 
                 let embedder = embedder.clone();
                 let store = store.clone();
+                let chunk_id = chunk.id;
 
-                info!("Spawning embedder worker: chunk_id={}", chunk.id);
-                tokio::spawn(async move {
+                info!("Spawning embedder worker: chunk_id={}", chunk_id);
+
+                let handle = tokio::spawn(async move {
                     let vec = match embedder.embed(&chunk.text).await {
                         Ok(vec) => vec,
                         Err(e) => {
@@ -195,18 +206,37 @@ impl Pipeline {
                         }
                     };
 
-                    info!(
-                        "Storing embedding: vec=[{},...], size={}",
-                        vec[0],
-                        vec.len()
-                    );
+                    if vec.is_empty() {
+                        error!("Received empty embedding for chunk_id={}", chunk_id);
+                    } else {
+                        info!(
+                            "Received embedding for chunk_id={}, size={}",
+                            chunk_id,
+                            vec.len()
+                        );
 
-                    if let Err(e) = store.insert(&vec, &chunk).await {
-                        info!("Failed to store embedding: {}", e);
+                        info!(
+                            "Storing embedding: vec=[{},...], size={}",
+                            vec[0],
+                            vec.len()
+                        );
+
+                        if let Err(e) = store.insert(&vec, &chunk).await {
+                            info!("Failed to store embedding: {}", e);
+                        }
                     }
 
                     drop(permit);
-                    info!("Embedder worker chunk_id={} completed", chunk.id);
+                    info!("Embedder worker chunk_id={} completed", chunk_id);
+                });
+
+                tokio::spawn(async move {
+                    if let Err(e) = handle.await {
+                        error!(
+                            "doc embedder task panicked: chunk_id={} err={:?}",
+                            chunk_id, e
+                        );
+                    }
                 });
             }
         })
