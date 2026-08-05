@@ -17,4 +17,6 @@ pub enum ExtractorError {
     PdfiumBindError(#[from] PdfiumError),
     #[error("utf-8 decode error")]
     Utf8Error(#[from] std::str::Utf8Error),
+    #[error("blocking task failed: {0}")]
+    JoinError(String),
 }
