@@ -1,4 +1,5 @@
 pub mod pdf;
+pub mod router;
 pub mod text;
 
 use crate::core::Document;

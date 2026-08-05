@@ -6,7 +6,8 @@ use crate::core::Chunk;
 use crate::core::DocumentJob;
 use crate::embedder::EmbedderError;
 use crate::embedder::local_embedder::LocalEmbedder;
-use crate::extractor::text::TextExtractor;
+use crate::extractor::ExtractorError;
+use crate::extractor::router::ExtractorRouter;
 use crate::fetcher::{local_file::LocalFileFetcher, retry::RetryFetcher};
 use crate::store::SearchResult;
 use crate::store::VectorStoreError;
@@ -46,6 +47,8 @@ pub enum PipelineError {
     VectorStoreError(#[from] VectorStoreError),
     #[error("embedder error: {0}")]
     EmbedderError(#[from] EmbedderError),
+    #[error("extractor error: {0}")]
+    ExtractorError(#[from] ExtractorError),
 }
 
 pub struct PipelineBuilder {
@@ -253,7 +256,7 @@ impl PipelineBuilder {
 
         let fetcher = Arc::new(RetryFetcher::new(Arc::new(LocalFileFetcher), 5, 750));
 
-        let extractor = Arc::new(TextExtractor::new());
+        let extractor = Arc::new(ExtractorRouter::new()?);
 
         let chunker = Arc::new(SimpleChunker::new());
 
